@@ -24,7 +24,7 @@ def plotNode(nodeTxt, centerPt, parentPt, nodeType):
         arrowprops=arrow_args)
 
 
-#def createPlot():
+#   def createPlot():
 #   fig = plt.figure(1, facecolor='white')
 #   fig.clf()
 #   createPlot.axl = plt.subplot(111, frameon=False)
