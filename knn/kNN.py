@@ -1,4 +1,4 @@
-from numpy import array, tile
+from numpy import array, tile, zeros
 import operator
 
 
@@ -25,3 +25,22 @@ def classify0(inX, dataSet, labels, k):
     sortedClassCount = sorted(
         classCount.items(), key=operator.itemgetter(1), reverse=True)
     return sortedClassCount[0][0]
+
+
+def file2matrix(filename):
+    fr = open(filename)
+    arrayOLines = fr.readlines()
+    # 得到文件行数
+    numberOfLines = len(arrayOLines)
+    # 创建返回的NumPy矩阵
+    returnMat = zeros((numberOfLines, 3))
+    classLabelVector = []
+    index = 0
+    # 解析文件数据到列表
+    for line in arrayOLines:
+        line = line.strip()
+        listFromLine = line.split('\t')
+        returnMat[index, :] = listFromLine[0:3]
+        classLabelVector.append(int(listFromLine[-1]))
+        index += 1
+    return returnMat, classLabelVector
