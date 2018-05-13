@@ -19,11 +19,15 @@ def calcMixMatrix(predictLabels, realLabels):
 
 
 def calcPrecision(tp, fp):
+    if tp + fp == 0:
+        return 0
     precision = tp / (tp + fp)
     return precision
 
 
 def calcRecall(tp, fn):
+    if tp + fn == 0:
+        return 0
     recall = tp / (tp + fn)
     return recall
 
