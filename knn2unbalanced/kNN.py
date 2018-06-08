@@ -3,7 +3,7 @@ import evaluate
 import operator
 
 
-# 构造分类器
+# 构造kNN类别加权分类器
 def classify0(inX, dataSet, labels, k):
     # 输入向量inX, 输入训练样本集dataSet, 标签向量labels, 选择最近邻居的数目k
     dataSetSize = dataSet.shape[0]
@@ -48,6 +48,43 @@ def classify0(inX, dataSet, labels, k):
         return 1
 
 
+# 构造kNN类别2加权分类器
+def classify4(inX, dataSet, labels, k):
+    dataSetSize = dataSet.shape[0]
+    diffMat = tile(inX, (dataSetSize, 1)) - dataSet
+    sqDiffMat = diffMat**2
+    sqDistances = sqDiffMat.sum(axis=1)
+    distances = sqDistances**0.5
+    sims = 1 / (0.001 + distances)
+    nNumber = 0
+    pNumber = 0
+    for label in labels:
+        if label == 1:
+            pNumber += 1
+        else:
+            nNumber += 1
+    nWeight = nNumber / len(labels)
+    pWeight = pNumber / len(labels)
+    for i in range(len(labels)):
+        if labels[i] == 1:
+            sims[i] *= pWeight
+        else:
+            sims[i] *= nWeight
+    sortedDistIndicies = argsort(-sims)
+    nSumWeights = 0.0
+    pSumWeights = 0.0
+    for i in range(k):
+        if labels[sortedDistIndicies[i]] == 1:
+            pSumWeights += sims[sortedDistIndicies[i]]
+        else:
+            nSumWeights += sims[sortedDistIndicies[i]]
+    if nSumWeights > pSumWeights:
+        return -1
+    else:
+        return 1
+
+
+# 构造kNN样本加权分类器
 def classify1(inX, dataSet, labels, k):
     dataSetSize = dataSet.shape[0]
     diffMat = tile(inX, (dataSetSize, 1)) - dataSet
@@ -71,6 +108,7 @@ def classify1(inX, dataSet, labels, k):
         return 1
 
 
+# 构造kNN类别和样本加权分类器
 def classify2(inX, dataSet, labels, k):
     dataSetSize = dataSet.shape[0]
     diffMat = tile(inX, (dataSetSize, 1)) - dataSet
@@ -112,6 +150,7 @@ def classify2(inX, dataSet, labels, k):
         return 1
 
 
+# 原kNN分类器
 def classify3(inX, dataSet, labels, k):
     dataSetSize = dataSet.shape[0]
     diffMat = tile(inX, (dataSetSize, 1)) - dataSet
@@ -128,32 +167,26 @@ def classify3(inX, dataSet, labels, k):
     return sortedClassCount[0][0]
 
 
-def loadDataSet(fileName):
-    fr = open(fileName)
-    arrayOLines = fr.readlines()
-    numberOfLines = len(arrayOLines)
-    featureNum = len(arrayOLines[0].strip().split('\t')) - 1
-    returnMat = zeros((numberOfLines, featureNum))
-    classLabelVector = []
-    index = 0
-    for line in arrayOLines:
-        listFromLine = line.strip().split('\t')
-        returnMat[index, :] = listFromLine[0:featureNum]
-        classLabelVector.append(listFromLine[-1])
-        index += 1
-    return returnMat, classLabelVector
-
-
-# 读取文件转化为NumPy
+# 处理数据，读取文件转化为NumPy
 def file2matrix(filename):
     fr = open(filename)
     arrayOLines = fr.readlines()
-    numberOfLines = len(arrayOLines)
-    featureNum = len(arrayOLines[0].split(',')) - 1
+    tmpNum = 0
+    features = []
+    for line in arrayOLines:
+        if line[0] == '@':
+            tmpNum += 1
+            if line.split(' ')[0] == '@inputs':
+                line = line.replace(',', '')
+                features = line.strip('\n').split(' ')[1:]
+        else:
+            break
+    numberOfLines = len(arrayOLines) - tmpNum
+    featureNum = len(arrayOLines[-2].split(',')) - 1
     returnMat = zeros((numberOfLines, featureNum))
     classLabelVector = []
     index = 0
-    for line in arrayOLines:
+    for line in arrayOLines[tmpNum:]:
         line = ''.join(line.split())
         listFromLine = line.split(',')
         returnMat[index, :] = listFromLine[0:featureNum]
@@ -162,7 +195,7 @@ def file2matrix(filename):
         else:
             classLabelVector.append(1)
         index += 1
-    return returnMat, classLabelVector
+    return returnMat, classLabelVector, features
 
 
 # 归一化数值
@@ -176,8 +209,14 @@ def autoNorm(minVals, maxVals, dataSet):
 
 # 交叉验证方法
 def crossAuth(dataMat, labels, i):
-    featureNum = dataMat.shape[1]  # 行数
     length = int(len(labels) / 10)
+    '''
+    trainingMat = dataMat[0:length * 8, :]
+    hmLabels = labels[0:length * 8]
+    testMat = dataMat[length * 8:, :]
+    chmLabels = labels[length * 8:]
+    '''
+    featureNum = dataMat.shape[1]  # 行数
     trainingMat = zeros((dataMat.shape[0] - length, featureNum))
     testMat = zeros((length, featureNum))
     hmLabels = []
@@ -191,9 +230,9 @@ def crossAuth(dataMat, labels, i):
     return trainingMat, testMat, hmLabels, chmLabels
 
 
-# 测试数据
+# 测试IPC_KNN
 def testIPKNN(fileName, kValue=5):
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
@@ -211,33 +250,26 @@ def testIPKNN(fileName, kValue=5):
         for i in range(m):
             classifierResult = classify0(normTestMat[i, :], normTrainingMat,
                                          hmLabels, kValue)
-            '''
-            print("the classifier came back with: %s, the real answer is: %s" %
-                ("negative" if classifierResult == -1 else "positive",
-                "negative" if chmLabels[i] == -1 else "positive"))
-            '''
             if (classifierResult != chmLabels[i]):
                 errorCount += 1.0
             predictLabels.append(classifierResult)
-            precision, recall, accuracy = evaluateClassifier(
+        precision, recall, accuracy = evaluateClassifier(
                 predictLabels, chmLabels)
-            precisions.append(precision)
-            recalls.append(recall)
-            accuracys.append(accuracy)
-        # print("the total numbers of errors is: %d" % errorCount)
-        # print("the total error rate is: %f" % (errorCount / float(m)))
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracys.append(accuracy)
     return output(precisions, recalls, accuracys)
 
 
+# 测试IPS_KNN
 def testIP2KNN(fileName, kValue=5):
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
     for j in range(10):
         normTrainingMat, normTestMat, hmLabels, chmLabels = crossAuth(
             dataMat, labels, j)
-        # 根据情况决定是否归一化
         minVals = normTrainingMat.min(0)
         maxVals = normTrainingMat.max(0)
         normTrainingMat = autoNorm(minVals, maxVals, normTrainingMat)
@@ -248,33 +280,26 @@ def testIP2KNN(fileName, kValue=5):
         for i in range(m):
             classifierResult = classify1(normTestMat[i, :], normTrainingMat,
                                          hmLabels, kValue)
-            '''
-            print("the classifier came back with: %s, the real answer is: %s" %
-                ("negative" if classifierResult == -1 else "positive",
-                "negative" if chmLabels[i] == -1 else "positive"))
-            '''
             if (classifierResult != chmLabels[i]):
                 errorCount += 1.0
             predictLabels.append(classifierResult)
-            precision, recall, accuracy = evaluateClassifier(
+        precision, recall, accuracy = evaluateClassifier(
                 predictLabels, chmLabels)
-            precisions.append(precision)
-            recalls.append(recall)
-            accuracys.append(accuracy)
-        # print("the total numbers of errors is: %d" % errorCount)
-        # print("the total error rate is: %f" % (errorCount / float(m)))
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracys.append(accuracy)
     return output(precisions, recalls, accuracys)
 
 
+# 测试IPCS_KNN
 def testIP3KNN(fileName, kValue=5):
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
     for j in range(10):
         normTrainingMat, normTestMat, hmLabels, chmLabels = crossAuth(
             dataMat, labels, j)
-        # 根据情况决定是否归一化
         minVals = normTrainingMat.min(0)
         maxVals = normTrainingMat.max(0)
         normTrainingMat = autoNorm(minVals, maxVals, normTrainingMat)
@@ -285,33 +310,56 @@ def testIP3KNN(fileName, kValue=5):
         for i in range(m):
             classifierResult = classify2(normTestMat[i, :], normTrainingMat,
                                          hmLabels, kValue)
-            '''
-            print("the classifier came back with: %s, the real answer is: %s" %
-                ("negative" if classifierResult == -1 else "positive",
-                "negative" if chmLabels[i] == -1 else "positive"))
-            '''
             if (classifierResult != chmLabels[i]):
                 errorCount += 1.0
             predictLabels.append(classifierResult)
-            precision, recall, accuracy = evaluateClassifier(
+        precision, recall, accuracy = evaluateClassifier(
                 predictLabels, chmLabels)
-            precisions.append(precision)
-            recalls.append(recall)
-            accuracys.append(accuracy)
-        # print("the total numbers of errors is: %d" % errorCount)
-        # print("the total error rate is: %f" % (errorCount / float(m)))
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracys.append(accuracy)
     return output(precisions, recalls, accuracys)
 
 
-def testKNN(fileName, kValue=5):
-    dataMat, labels = file2matrix(fileName)
+# 测试IPCS_KNN
+def testIP4KNN(fileName, kValue=5):
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
     for j in range(10):
         normTrainingMat, normTestMat, hmLabels, chmLabels = crossAuth(
             dataMat, labels, j)
-        # 根据情况决定是否归一化
+        minVals = normTrainingMat.min(0)
+        maxVals = normTrainingMat.max(0)
+        normTrainingMat = autoNorm(minVals, maxVals, normTrainingMat)
+        normTestMat = autoNorm(minVals, maxVals, normTestMat)
+        errorCount = 0.0
+        m = len(normTestMat)
+        predictLabels = []
+        for i in range(m):
+            classifierResult = classify4(normTestMat[i, :], normTrainingMat,
+                                         hmLabels, kValue)
+            if (classifierResult != chmLabels[i]):
+                errorCount += 1.0
+            predictLabels.append(classifierResult)
+        precision, recall, accuracy = evaluateClassifier(
+                predictLabels, chmLabels)
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracys.append(accuracy)
+    return output(precisions, recalls, accuracys)
+
+
+# 测试KNN
+def testKNN(fileName, kValue=5):
+    dataMat, labels, features = file2matrix(fileName)
+    precisions = []
+    recalls = []
+    accuracys = []
+    for j in range(10):
+        normTrainingMat, normTestMat, hmLabels, chmLabels = crossAuth(
+            dataMat, labels, j)
         minVals = normTrainingMat.min(0)
         maxVals = normTrainingMat.max(0)
         normTrainingMat = autoNorm(minVals, maxVals, normTrainingMat)
@@ -325,26 +373,25 @@ def testKNN(fileName, kValue=5):
             if (classifierResult != chmLabels[i]):
                 errorCount += 1.0
             predictLabels.append(classifierResult)
-            precision, recall, accuracy = evaluateClassifier(
+        precision, recall, accuracy = evaluateClassifier(
                 predictLabels, chmLabels)
-            precisions.append(precision)
-            recalls.append(recall)
-            accuracys.append(accuracy)
-        # print("the total numbers of errors is: %d" % errorCount)
-        # print("the total error rate is: %f" % (errorCount / float(m)))
+        precisions.append(precision)
+        recalls.append(recall)
+        accuracys.append(accuracy)
     return output(precisions, recalls, accuracys)
 
 
+# 测试SVM
 def testSVM(fileName):
     from sklearn.svm import SVC
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
     for i in range(10):
         normTrainingMat, normTestMat, hmLabels, chmLabels = crossAuth(
             dataMat, labels, i)
-        model = SVC(kernel='rbf', probability=True)
+        model = SVC(kernel='rbf')  # kernel='linear'
         model.fit(normTrainingMat, hmLabels)
         predictLabels = model.predict(normTestMat)
         precision, recall, accuracy = evaluateClassifier(
@@ -355,9 +402,10 @@ def testSVM(fileName):
     return output(precisions, recalls, accuracys)
 
 
+# 测试随机森林
 def testRandomForest(fileName):
     from sklearn.ensemble import RandomForestClassifier
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
@@ -375,9 +423,10 @@ def testRandomForest(fileName):
     return output(precisions, recalls, accuracys)
 
 
+# 测试logistics回归
 def testLogistic(fileName):
     from sklearn.linear_model import LogisticRegression
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
@@ -395,16 +444,19 @@ def testLogistic(fileName):
     return output(precisions, recalls, accuracys)
 
 
+# 测试朴素贝叶斯
 def testBayes(fileName):
-    from sklearn.naive_bayes import MultinomialNB
-    dataMat, labels = file2matrix(fileName)
+    # MultinomialNB
+    from sklearn.naive_bayes import GaussianNB
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []
     for i in range(10):
         normTrainingMat, normTestMat, hmLabels, chmLabels = crossAuth(
             dataMat, labels, i)
-        model = MultinomialNB(alpha=0.01)
+        # model = MultinomialNB(alpha=0.01)
+        model = GaussianNB()
         model.fit(normTrainingMat, hmLabels)
         predictLabels = model.predict(normTestMat)
         precision, recall, accuracy = evaluateClassifier(
@@ -415,9 +467,10 @@ def testBayes(fileName):
     return output(precisions, recalls, accuracys)
 
 
+# 测试决策树
 def testDecisionTree(fileName):
     from sklearn import tree
-    dataMat, labels = file2matrix(fileName)
+    dataMat, labels, features = file2matrix(fileName)
     precisions = []
     recalls = []
     accuracys = []

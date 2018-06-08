@@ -16,8 +16,9 @@ def createIRPlotter(dataMat, labels, features, name):
     feature = random.sample([i for i in range(len(features))], 2)
     ax.scatter(dataMat[:, feature[0]], dataMat[:, feature[1]], c=labels)
     plt.xlabel(features[feature[0]])
-    plt.ylabel(features[feature[1]])
-    plt.title(name + '(IR=' + str(int(negativeNum / positiveNum)) + ')')
+    plt.ylabel(
+        features[feature[1]])
+    plt.title(name + '(IR=' + str(round(negativeNum / positiveNum, 2)) + ')')
     plt.show()
 
 
@@ -54,7 +55,8 @@ def createClassPlotter(precisions, recalls, f_measures):
         label='F-measure')
     plt.xlabel('Algorithm')
     plt.ylabel('Ratio')
-    plt.xticks(index + bar_width / 2, ('IPC_K', 'IPS_K', 'IPCS_K', 'KNN',
-                                       'SVM', 'RF', 'Bayes', 'Tree'))
+    plt.xticks(
+        index + bar_width / 2,
+        ('IPC_K', 'IPS_K', 'IPCS_K', 'KNN', 'SVM', 'RF', 'Bayes', 'Tree'))
     plt.legend()
     plt.show()
