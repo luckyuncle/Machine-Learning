@@ -60,3 +60,18 @@ def createClassPlotter(precisions, recalls, f_measures):
         ('IPC_K', 'IPS_K', 'IPCS_K', 'KNN', 'SVM', 'RF', 'Bayes', 'Tree'))
     plt.legend()
     plt.show()
+
+
+def createROCPlotter(allPredictLabels, allRealLabels, name):
+    from sklearn.metrics import roc_curve
+    import evaluate
+    fpr, tpr, _ = roc_curve(allPredictLabels,  allRealLabels)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(fpr, tpr)
+    plt.title(name + '-roc')
+    plt.xlabel('FPR')
+    plt.ylabel('TPR')
+    plt.show()
+    roc_auc = evaluate.clacAUC(fpr, tpr)
+    print("The value of AUC is " + str(roc_auc))
